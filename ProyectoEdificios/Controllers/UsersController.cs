@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using DocumentFormat.OpenXml.Office2010.Excel;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using ProyectoEdificios.Data.Models;
@@ -21,31 +22,6 @@ namespace ProyectoEdificios.Controllers
         {
             _context = context;
             _configuration = configuration;
-        }
-
-        // ----------------- REGISTER -----------------
-        [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] User user)
-        {
-            if (await _context.Users.AnyAsync(u => u.Email == user.Email))
-                return BadRequest(new { message = "El correo ya está registrado." });
-
-            var salt = CrearSalt();
-            var hashedPassword = GenerarHash(user.Clave, salt);
-
-            var newUser = new User
-            {
-                Codigo = user.Codigo,
-                Nombre = user.Nombre,
-                Email = user.Email,
-                Clave = hashedPassword,
-                Salt = salt
-            };
-
-            _context.Users.Add(newUser);
-            await _context.SaveChangesAsync();
-
-            return Ok(new { message = "Usuario registrado exitosamente." });
         }
 
         // ----------------- LOGIN -----------------
@@ -93,6 +69,60 @@ namespace ProyectoEdificios.Controllers
             });
         }
 
+        // ----------------- REGISTER -----------------
+        [HttpPost("register")]
+        public async Task<IActionResult> Register([FromBody] User user)
+        {
+            if (await _context.Users.AnyAsync(u => u.Email == user.Email))
+                return BadRequest(new { message = "El correo ya está registrado." });
+
+            var salt = CrearSalt();
+            var hashedPassword = GenerarHash(user.Clave, salt);
+
+            var newUser = new User
+            {
+                Codigo = user.Codigo,
+                Nombre = user.Nombre,
+                Email = user.Email,
+                Clave = hashedPassword,
+                Salt = salt
+            };
+
+            _context.Users.Add(newUser);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Usuario registrado exitosamente." });
+        }
+
+        // ----------------- UPDATE -----------------
+        [HttpPut("Update")]
+        public async Task<IActionResult> UpdateUser([FromBody] UpdateUserDTO user)
+        {
+            var userDb = await _context.Users
+                .Where(u => u.Id == user.Id)
+                .FirstOrDefaultAsync();
+
+            userDb.Nombre = user.Nombre;
+            userDb.Codigo = user.Codigo;
+
+            if(user.ActualizarClave)
+            {
+                if (string.IsNullOrEmpty(user.clave))
+                {
+                    return BadRequest(new { message = "La clave no puede estar vacia" });
+                }
+
+                var salt = CrearSalt();
+                var hashedPassword = GenerarHash(user.clave, salt);
+                userDb.Clave = hashedPassword;
+                userDb.Salt = salt;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Usuario registrado exitosamente." });
+        }
+
         // ----------------- GET ALL USERS -----------------
         [HttpGet]
         public async Task<ActionResult<IEnumerable<User>>> GetAllUsers()
@@ -106,6 +136,28 @@ namespace ProyectoEdificios.Controllers
                     Email = u.Email
                 }).ToListAsync();
         }
+
+        // ----------------- GET ALL USERS -----------------
+        [HttpGet("{id:int}")]
+        public async Task<ActionResult<User>> GetUserById(int id)
+        {
+            var user = await _context.Users
+                .Where(u => u.Id == id)
+                .Select(u => new User
+                {
+                    Id = u.Id,
+                    Codigo = u.Codigo,
+                    Nombre = u.Nombre,
+                    Email = u.Email
+                }).FirstOrDefaultAsync();
+
+            if (user == null) return NotFound();
+
+
+            return Ok(user);
+        }
+
+
 
         // ----------------- UTILIDADES -----------------
         private static string CrearSalt()
@@ -128,5 +180,7 @@ namespace ProyectoEdificios.Controllers
             string hashNuevo = GenerarHash(password, salt);
             return hashNuevo == hashGuardado;
         }
+
+        public sealed record UpdateUserDTO(int Id, string Nombre, string Codigo, bool ActualizarClave, string? clave);
     }
 }
