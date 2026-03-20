@@ -1,186 +1,85 @@
-﻿using DocumentFormat.OpenXml.Office2010.Excel;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using ProyectoEdificios.Data.Models;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
-
+using ProyectoEdificios.Models.DTO.Users;
+using ProyectoEdificios.Services.Users;
 
 namespace ProyectoEdificios.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = "admin")]
     public class UsersController : ControllerBase
     {
-        private readonly ProyectoEdificiosDbContext _context;
-        private readonly IConfiguration _configuration;
+        private readonly IUserService _userService;
 
-        public UsersController(ProyectoEdificiosDbContext context, IConfiguration configuration)
+        public UsersController(IUserService userService)
         {
-            _context = context;
-            _configuration = configuration;
+            _userService = userService;
         }
 
-        // ----------------- LOGIN -----------------
-        [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] User user)
-        {
-            var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == user.Email);
-            if (existingUser == null)
-                return BadRequest(new { message = "Usuario o contraseña inválidos." });
-
-            bool passwordValid = ValidarPassword(user.Clave, existingUser.Clave, existingUser.Salt);
-            if (!passwordValid)
-                return BadRequest(new { message = "Usuario o contraseña inválidos." });
-
-            var jwtSection = _configuration.GetSection("Jwt");
-            var jwtKey = jwtSection["key"];
-            var jwtIssuer = jwtSection["Issuer"];
-            var jwtAudience = jwtSection["Audience"];
-
-                var claims = new[]
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, jwtSection["Subject"] ?? "UserToken"),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim("Email", existingUser.Email),
-                new Claim("Nombre", existingUser.Nombre)
-            };
-
-            var secretKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
-            var signinCredentials = new SigningCredentials(secretKey, SecurityAlgorithms.HmacSha256);
-
-            var tokenOptions = new JwtSecurityToken(
-                issuer: jwtIssuer,
-                audience: jwtAudience,
-                claims: claims,
-                expires: DateTime.Now.AddHours(4),
-                signingCredentials: signinCredentials
-            );
-
-            var tokenString = new JwtSecurityTokenHandler().WriteToken(tokenOptions);
-
-            return Ok(new
-            {
-                user = new { existingUser.Id, existingUser.Nombre, existingUser.Email },
-                token = tokenString
-            });
-        }
-
-        // ----------------- REGISTER -----------------
-        [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] User user)
-        {
-            if (await _context.Users.AnyAsync(u => u.Email == user.Email))
-                return BadRequest(new { message = "El correo ya está registrado." });
-
-            var salt = CrearSalt();
-            var hashedPassword = GenerarHash(user.Clave, salt);
-
-            var newUser = new User
-            {
-                Codigo = user.Codigo,
-                Nombre = user.Nombre,
-                Email = user.Email,
-                Clave = hashedPassword,
-                Salt = salt
-            };
-
-            _context.Users.Add(newUser);
-            await _context.SaveChangesAsync();
-
-            return Ok(new { message = "Usuario registrado exitosamente." });
-        }
-
-        // ----------------- UPDATE -----------------
-        [HttpPut("Update")]
-        public async Task<IActionResult> UpdateUser([FromBody] UpdateUserDTO user)
-        {
-            var userDb = await _context.Users
-                .Where(u => u.Id == user.Id)
-                .FirstOrDefaultAsync();
-
-            userDb.Nombre = user.Nombre;
-            userDb.Codigo = user.Codigo;
-
-            if(user.ActualizarClave)
-            {
-                if (string.IsNullOrEmpty(user.clave))
-                {
-                    return BadRequest(new { message = "La clave no puede estar vacia" });
-                }
-
-                var salt = CrearSalt();
-                var hashedPassword = GenerarHash(user.clave, salt);
-                userDb.Clave = hashedPassword;
-                userDb.Salt = salt;
-            }
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new { message = "Usuario registrado exitosamente." });
-        }
-
-        // ----------------- GET ALL USERS -----------------
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<User>>> GetAllUsers()
+        [ProducesResponseType(typeof(List<UserDto>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
         {
-            return await _context.Users
-                .Select(u => new User
-                {
-                    Id = u.Id,
-                    Codigo = u.Codigo,
-                    Nombre = u.Nombre,
-                    Email = u.Email
-                }).ToListAsync();
+            var users = await _userService.GetAllAsync(cancellationToken);
+            return Ok(users);
         }
 
-        // ----------------- GET ALL USERS -----------------
         [HttpGet("{id:int}")]
-        public async Task<ActionResult<User>> GetUserById(int id)
+        [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
         {
-            var user = await _context.Users
-                .Where(u => u.Id == id)
-                .Select(u => new User
-                {
-                    Id = u.Id,
-                    Codigo = u.Codigo,
-                    Nombre = u.Nombre,
-                    Email = u.Email
-                }).FirstOrDefaultAsync();
+            var user = await _userService.GetByIdAsync(id, cancellationToken);
 
-            if (user == null) return NotFound();
-
+            if (user is null)
+                return NotFound();
 
             return Ok(user);
         }
 
-
-
-        // ----------------- UTILIDADES -----------------
-        private static string CrearSalt()
+        [HttpPost]
+        [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> Create([FromBody] CreateUserDto request, CancellationToken cancellationToken)
         {
-            var rng = RandomNumberGenerator.Create();
-            var buff = new byte[16];
-            rng.GetBytes(buff);
-            return Convert.ToBase64String(buff);
+            var result = await _userService.CreateAsync(request, cancellationToken);
+
+            if (!result.Success)
+                return BadRequest(new { message = result.Error });
+
+            return CreatedAtAction(nameof(GetById), new { id =result.User!.Id }, result.User);
         }
 
-        private static string GenerarHash(string input, string salt)
+        [HttpPut("{id:int}")]
+        [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> Update(int id, [FromBody] UpdateUserDto request, CancellationToken cancellationToken)
         {
-            var bytes = Encoding.UTF8.GetBytes(input + salt);
-            var hash = SHA256.Create().ComputeHash(bytes);
-            return Convert.ToBase64String(hash);
+            var result = await _userService.UpdateAsync(id, request, cancellationToken);
+
+            if (!result.Success && result.Error == "El usuario no existe.")
+                return NotFound(new { message = result.Error });
+
+            if (!result.Success)
+                return BadRequest(new { message = result.Error });
+
+            return Ok(result.User);
         }
 
-        private static bool ValidarPassword(string password, string hashGuardado, string salt)
+        [HttpDelete("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
         {
-            string hashNuevo = GenerarHash(password, salt);
-            return hashNuevo == hashGuardado;
+            var result = await _userService.DeleteAsync(id, cancellationToken);
+
+            if (!result.Success)
+                return NotFound(new { message = result.Error });
+
+            return NoContent();
         }
 
-        public sealed record UpdateUserDTO(int Id, string Nombre, string Codigo, bool ActualizarClave, string? clave);
     }
 }

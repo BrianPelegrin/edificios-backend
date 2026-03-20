@@ -1,11 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using ProyectoEdificios.Data.Models;
+using ProyectoEdificios.Data.Contexts;
+using ProyectoEdificios.Mappings;
+using ProyectoEdificios.Models.DTO;
+using ProyectoEdificios.Models.DTO.Projects;
+using ProyectoEdificios.Services.Projects;
 
 namespace ProyectoEdificios.Controllers
 {
@@ -14,110 +14,155 @@ namespace ProyectoEdificios.Controllers
     public class ProjectsController : ControllerBase
     {
         private readonly ProyectoEdificiosDbContext _context;
+        private readonly IProjectApartmentsService _projectApartmentsService;
+        private readonly IProjectService _projectService;
+        private readonly IProjectLayoutService _projectLayoutService;
 
-        public ProjectsController(ProyectoEdificiosDbContext context)
+        public ProjectsController(
+            ProyectoEdificiosDbContext context,
+            IProjectApartmentsService projectApartmentsService,
+            IProjectService projectService,
+            IProjectLayoutService projectLayoutService)
         {
             _context = context;
+            _projectApartmentsService = projectApartmentsService;
+            _projectService = projectService;
+            _projectLayoutService = projectLayoutService;
         }
 
-        // GET: api/Projects
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Project>>> GetProjects()
+        [ProducesResponseType(typeof(List<ProjectDto>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetProjects(CancellationToken cancellationToken)
         {
-            return await _context.Projects.ToListAsync();
+            var projects = await _context.Projects
+                .AsNoTracking()
+                .Select(ProjectMappings.ToDtoExpression)
+                .ToListAsync(cancellationToken);
+
+            return Ok(projects);
         }
 
-        // GET: api/Projects/5
         [HttpGet("{id}")]
-        public async Task<ActionResult<Project>> GetProject(string id)
+        [ProducesResponseType(typeof(ProjectDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetProjectById(string id, CancellationToken cancellationToken)
         {
-            var project = await _context.Projects.FindAsync(id);
+            var project = await _context.Projects
+                .AsNoTracking()
+                .Where(x => x.Id == id)
+                .Select(ProjectMappings.ToDtoExpression)
+                .FirstOrDefaultAsync(cancellationToken);
 
-            if (project == null)
-            {
+            if (project is null)
                 return NotFound();
-            }
 
-            project.Edificios = await _context.Edificios.Where(x => x.ProjectId == id).ToListAsync();
-
-            return project;
+            return Ok(project);
         }
 
-        // PUT: api/Projects/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutProject(string id, Project project)
+        [HttpGet("{id}/layout")]
+        [ProducesResponseType(typeof(Project3DLayoutDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetProjectLayout(string id, CancellationToken cancellationToken)
         {
-            if (id != project.Id)
-            {
-                return BadRequest();
-            }
+            var projectExists = await _context.Projects
+                .AsNoTracking()
+                .AnyAsync(x => x.Id == id, cancellationToken);
 
-            _context.Entry(project).State = EntityState.Modified;
+            if (!projectExists)
+                return NotFound(new { message = $"Project '{id}' was not found." });
 
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!ProjectExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
+            var response = await _context.Projects
+                .AsNoTracking()
+                .Where(x => x.Id == id)
+                .Where(x => x.Layout != null)
+                .Select(ProjectLayoutMappings.To3DLayoutDtoExpression)
+                .FirstOrDefaultAsync(cancellationToken);
 
-            return NoContent();
+            if (response is null)
+                return NotFound(new { message = $"Project '{id}' does not have a layout configured." });
+
+            return Ok(response);
         }
 
-        // POST: api/Projects
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        [Authorize(Roles = "admin")]
+        [HttpPut("{id}/layout")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> UpsertProjectLayout(string id, [FromBody] UpsertProject3DLayoutDto request, CancellationToken cancellationToken)
+        {
+            var result = await _projectLayoutService.UpsertAsync(id, request, cancellationToken);
+
+            if (!result.Success && result.Error == "El proyecto no existe.")
+                return NotFound(new { message = result.Error });
+
+            if (!result.Success)
+                return BadRequest(new { message = result.Error });
+
+            return Ok(new { success = true });
+        }
+
+        [HttpGet("{id}/apartments")]
+        [ProducesResponseType(typeof(ProjectApartmentsResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetProjectApartments(string id, CancellationToken cancellationToken)
+        {
+            var response = await _projectApartmentsService.GetByProjectIdAsync(id, cancellationToken);
+
+            if (response is null)
+                return NotFound();
+
+            return Ok(response);
+        }
+
+        [Authorize(Roles = "admin")]
         [HttpPost]
-        public async Task<ActionResult<Project>> PostProject(Project project)
+        [ProducesResponseType(typeof(ProjectDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> CreateProject([FromBody] CreateProjectDto request, CancellationToken cancellationToken)
         {
-            _context.Projects.Add(project);
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateException)
-            {
-                if (ProjectExists(project.Id))
-                {
-                    return Conflict();
-                }
-                else
-                {
-                    throw;
-                }
-            }
+            var result = await _projectService.CreateAsync(request, cancellationToken);
 
-            return CreatedAtAction("GetProject", new { id = project.Id }, project);
+            if (!result.Success && result.Error == "Ya existe un proyecto con ese id.")
+                return Conflict(new { message = result.Error });
+
+            if (!result.Success)
+                return BadRequest(new { message = result.Error });
+
+            return CreatedAtAction(nameof(GetProjectById), new { id = result.Project!.Id }, result.Project);
         }
 
-        // DELETE: api/Projects/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteProject(string id)
+        [Authorize(Roles = "admin")]
+        [HttpPut("{id}")]
+        [ProducesResponseType(typeof(ProjectDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> UpdateProject(string id, [FromBody] UpdateProjectDto request, CancellationToken cancellationToken)
         {
-            var project = await _context.Projects.FindAsync(id);
-            if (project == null)
-            {
-                return NotFound();
-            }
+            var result = await _projectService.UpdateAsync(id, request, cancellationToken);
 
-            _context.Projects.Remove(project);
-            await _context.SaveChangesAsync();
+            if (!result.Success && result.Error == "El proyecto no existe.")
+                return NotFound(new { message = result.Error });
+
+            if (!result.Success)
+                return BadRequest(new { message = result.Error });
+
+            return Ok(result.Project);
+        }
+
+        [Authorize(Roles = "admin")]
+        [HttpDelete("{id}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> DeleteProject(string id, CancellationToken cancellationToken)
+        {
+            var result = await _projectService.DeleteAsync(id, cancellationToken);
+
+            if (!result.Success)
+                return NotFound(new { message = result.Error });
 
             return NoContent();
-        }
-
-        private bool ProjectExists(string id)
-        {
-            return _context.Projects.Any(e => e.Id == id);
         }
     }
 }
