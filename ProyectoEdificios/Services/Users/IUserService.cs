@@ -9,5 +9,7 @@ namespace ProyectoEdificios.Services.Users
         Task<(bool Success, string? Error, UserDto? User)> CreateAsync(CreateUserDto request, CancellationToken cancellationToken = default);
         Task<(bool Success, string? Error, UserDto? User)> UpdateAsync(int id, UpdateUserDto request, CancellationToken cancellationToken = default);
         Task<(bool Success, string? Error)> DeleteAsync(int id, CancellationToken cancellationToken = default);
+
+        Task<(bool Success, string? Error, UserDto? User)> UpdateMyProfileAsync( int userId, UpdateMyProfileDto request, CancellationToken cancellationToken = default);
     }
 }

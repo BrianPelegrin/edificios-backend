@@ -7,6 +7,8 @@
         public string ProjectId { get; set; } = default!;
         public double RotationY { get; set; }
         public string Name { get; set; } = default!;
+        public int LayoutCols { get; set; }
+        public int LayoutRows { get; set; }
         public PositionDto Position { get; set; } = new();
         public DimensionsDto Dimensions { get; set; } = new();
         public List<LayoutUnitDto> Units { get; set; } = [];
@@ -20,8 +22,8 @@
 
     public class DimensionsDto
     {
-        public int Width { get; set; }
-        public int Depth { get; set; }
-        public int Height { get; set; }
+        public decimal Width { get; set; }
+        public decimal Depth { get; set; }
+        public decimal Height { get; set; }
     }
 }

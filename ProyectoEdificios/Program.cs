@@ -68,6 +68,9 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.Configure<AdminUserOptions>(
     builder.Configuration.GetSection("AdminUser"));
 
+builder.Services.Configure<ResourcesOptions>(
+    builder.Configuration.GetSection("Resources"));
+
 
 builder.Services.AddDbContext<ProyectoEdificiosDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));

@@ -11,6 +11,9 @@
         public string Id { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public double RotationY { get; set; }
+        public int LayoutCols { get; set; }
+        public int LayoutRows { get; set; }
+
         public UpsertLayoutPositionDto Position { get; set; } = new();
         public UpsertLayoutDimensionsDto Dimensions { get; set; } = new();
         public List<UpsertLayoutUnitDto> Units { get; set; } = [];
@@ -24,9 +27,9 @@
 
     public sealed class UpsertLayoutDimensionsDto
     {
-        public int Width { get; set; }
-        public int Depth { get; set; }
-        public int Height { get; set; }
+        public decimal Width { get; set; }
+        public decimal Depth { get; set; }
+        public decimal Height { get; set; }
     }
 
     public sealed class UpsertLayoutUnitDto
@@ -35,6 +38,8 @@
         public string Name { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public bool Paid { get; set; }
+        public int Floor { get; set; }              // 1..N
+        public int Slot { get; set; }               // 0..(LayoutCols*LayoutRows - 1)
         public string? DetailedUnitCode { get; set; } = string.Empty;
     }
 

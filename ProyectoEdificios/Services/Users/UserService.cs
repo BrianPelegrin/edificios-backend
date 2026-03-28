@@ -3,10 +3,8 @@ using ProyectoEdificios.Data.Contexts;
 using ProyectoEdificios.Mappings;
 using ProyectoEdificios.Models.DTO.Users;
 using ProyectoEdificios.Models.Entities.Users;
-using ProyectoEdificios.Models.Entities.Users;
 using ProyectoEdificios.Services.Auth;
 using System.Security.Cryptography;
-using System.Text;
 
 namespace ProyectoEdificios.Services.Users
 {
@@ -15,7 +13,8 @@ namespace ProyectoEdificios.Services.Users
         private static readonly HashSet<string> AllowedRoles = new(StringComparer.OrdinalIgnoreCase)
         {
             "admin",
-            "viewer"
+            "viewer",
+            "editor"
         };
 
         private readonly ProyectoEdificiosDbContext _context;
@@ -119,6 +118,68 @@ namespace ProyectoEdificios.Services.Users
             await _context.SaveChangesAsync(cancellationToken);
 
             return (true, null, user.ToDto());
+        }
+
+        public async Task<(bool Success, string? Error, UserDto? User)> UpdateMyProfileAsync(
+            int userId,
+            UpdateMyProfileDto request,
+            CancellationToken cancellationToken = default)
+        {
+            if (request is null)
+                return (false, "El cuerpo de la solicitud es obligatorio.", null);
+
+            if (request.Id <= 0)
+                return (false, "El id es obligatorio.", null);
+
+            if (request.Id != userId)
+                return (false, "El id enviado no coincide con el usuario autenticado.", null);
+
+            var updateName = !string.IsNullOrWhiteSpace(request.Name);
+            var updatePassword = !string.IsNullOrWhiteSpace(request.Password);
+
+            if (!updateName && !updatePassword)
+                return (false, "Debes enviar al menos name o password.", null);
+
+            var user = await _context.Set<User>()
+                .FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
+
+            if (user is null)
+                return (false, "El usuario no existe.", null);
+
+            if (updateName)
+                user.Nombre = request.Name!.Trim();
+
+            if (updatePassword)
+            {
+                if (string.IsNullOrWhiteSpace(request.OldPassword))
+                    return (false, "La contraseña actual es obligatoria para cambiar la contraseña.", null);
+
+                var validOldPassword = _passwordHasher.VerifyPassword(
+                    request.OldPassword.Trim(),
+                    user.Clave,
+                    user.Salt);
+
+                if (!validOldPassword)
+                    return (false, "La contraseña actual no es correcta.", null);
+
+                if (request.Password!.Trim().Length < 6)
+                    return (false, "La nueva contraseña debe tener al menos 6 caracteres.", null);
+
+                var passwordResult = _passwordHasher.HashPassword(request.Password.Trim());
+                user.Clave = passwordResult.Hash;
+                user.Salt = string.IsNullOrWhiteSpace(passwordResult.Salt) ? null : passwordResult.Salt;
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return (true, null, new UserDto
+            {
+                Id = user.Id,
+                Codigo = user.Codigo,
+                Name = user.Nombre,
+                Email = user.Email,
+                Role = user.Role
+            });
         }
 
         public async Task<(bool Success, string? Error)> DeleteAsync(int id, CancellationToken cancellationToken = default)

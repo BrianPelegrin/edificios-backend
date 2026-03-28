@@ -1,8 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using ProyectoEdificios.Models.Options;
 using ProyectoEdificios.Data.Contexts;
-using ProyectoEdificios.Models.Entities.Users;
 using ProyectoEdificios.Models.Entities.Users;
 using ProyectoEdificios.Models.Options;
 

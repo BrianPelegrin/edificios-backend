@@ -20,6 +20,8 @@ namespace ProyectoEdificios.Mappings
                         ProjectId = project.Id,
                         Name = building.Name,
                         RotationY = building.RotationY,
+                        LayoutRows = building.LayoutRows,
+                        LayoutCols = building.LayoutCols,
                         Position = new PositionDto
                         {
                             X = building.PositionX,
@@ -42,7 +44,9 @@ namespace ProyectoEdificios.Mappings
                                     : unit.Status == UnitStatus.Sold ? "sold"
                                     : "delivered",
                                 Paid = unit.Paid,
-                                DetailedUnitCode = unit.ExternalUnitCode
+                                DetailedUnitCode = unit.ExternalUnitCode,
+                                Slot = unit.Slot,
+                                Floor = unit.Floor,
                             })
                             .ToList()
                     })
@@ -77,6 +81,8 @@ namespace ProyectoEdificios.Mappings
                 ProjectId = projectId,
                 Name = building.Name,
                 RotationY = building.RotationY,
+                LayoutRows = building.LayoutRows,
+                LayoutCols = building.LayoutCols,
                 Position = new PositionDto
                 {
                     X = building.PositionX,
@@ -105,7 +111,9 @@ namespace ProyectoEdificios.Mappings
                 Name = unit.Name,
                 Status = MapStatus(unit.Status),
                 Paid = unit.Paid,
-                DetailedUnitCode = unit.ExternalUnitCode
+                DetailedUnitCode = unit.ExternalUnitCode,
+                Slot = unit.Slot,
+                Floor = unit.Floor,
             };
         }
 

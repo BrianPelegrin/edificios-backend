@@ -179,6 +179,8 @@ namespace ProyectoEdificios.Services.Projects
                 PositionX = dto.Position.X,
                 PositionZ = dto.Position.Z,
                 RotationY = dto.RotationY,
+                LayoutCols = dto.LayoutCols,
+                LayoutRows = dto.LayoutRows,
                 Width = dto.Dimensions.Width,
                 Depth = dto.Dimensions.Depth,
                 Height = dto.Dimensions.Height,
@@ -199,7 +201,9 @@ namespace ProyectoEdificios.Services.Projects
                 Name = dto.Name.Trim(),
                 ExternalUnitCode = dto.DetailedUnitCode.Trim(),
                 Status = unitStatus,
-                Paid = dto.Paid
+                Paid = dto.Paid,
+                Floor = dto.Floor,
+                Slot = dto.Slot
             };
         }
 

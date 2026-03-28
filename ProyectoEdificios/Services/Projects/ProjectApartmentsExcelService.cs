@@ -1,5 +1,7 @@
 ﻿using ClosedXML.Excel;
+using Microsoft.Extensions.Options;
 using ProyectoEdificios.Models.DTO;
+using ProyectoEdificios.Models.Options;
 using System.Globalization;
 
 namespace ProyectoEdificios.Services.Projects
@@ -7,15 +9,29 @@ namespace ProyectoEdificios.Services.Projects
     public sealed class ProjectApartmentsExcelService : IProjectApartmentsService
     {
         private readonly IWebHostEnvironment _environment;
+        private readonly ResourcesOptions _options;
 
-        public ProjectApartmentsExcelService(IWebHostEnvironment environment)
+        public ProjectApartmentsExcelService(IWebHostEnvironment environment, IOptions<ResourcesOptions> options)
         {
             _environment = environment;
+            _options = options.Value;
+        }
+
+        public List<string> GetSheetList()
+        {
+            var filePath = Path.Combine(_environment.ContentRootPath, _options.FolderName, _options.ChangeControlFileName);
+
+            if (!File.Exists(filePath))
+                return new List<string>();
+
+            using var workbook = new XLWorkbook(filePath);
+
+            return workbook.Worksheets.Select(ws => ws.Name).ToList();
         }
 
         public Task<ProjectApartmentsResponseDto?> GetByProjectIdAsync(string projectId, CancellationToken cancellationToken = default)
         {
-            var filePath = Path.Combine(_environment.ContentRootPath, "Data", "control2.xlsx");
+            var filePath = Path.Combine(_environment.ContentRootPath, _options.FolderName, _options.ChangeControlFileName);
 
             if (!File.Exists(filePath))
                 return Task.FromResult<ProjectApartmentsResponseDto?>(null);
@@ -163,5 +179,7 @@ namespace ProyectoEdificios.Services.Projects
 
             return null;
         }
+
+        
     }
 }
