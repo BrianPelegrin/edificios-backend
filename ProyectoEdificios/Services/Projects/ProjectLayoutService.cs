@@ -31,61 +31,60 @@ namespace ProyectoEdificios.Services.Projects
             if (validationError is not null)
                 return (false, false, validationError);
 
-            var project = await _context.Projects
-                .Include(x => x.Layout)
-                    .ThenInclude(x => x.Buildings)
-                        .ThenInclude(x => x.Units)
-                .FirstOrDefaultAsync(x => x.Id == projectId, cancellationToken);
-
-            if (project is null)
-                return (false, true, "El proyecto no existe.");
-
             await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                ProjectLayout layout;
+                var layoutId = await _context.ProjectLayouts
+                    .AsNoTracking()
+                    .Where(x => x.ProjectId == projectId)
+                    .Select(x => x.Id)
+                    .FirstOrDefaultAsync(cancellationToken);
 
-                if (project.Layout is null)
+                if (layoutId == 0)
                 {
-                    layout = new ProjectLayout
+                    var projectExists = await _context.Projects
+                        .AsNoTracking()
+                        .AnyAsync(x => x.Id == projectId, cancellationToken);
+
+                    if (!projectExists)
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                        return (false, true, "El proyecto no existe.");
+                    }
+
+                    var layout = new ProjectLayout
                     {
                         ProjectId = projectId,
                         GridSize = request.GridSize
                     };
 
-                    project.Layout = layout;
+                    _context.ProjectLayouts.Add(layout);
                     await _context.SaveChangesAsync(cancellationToken);
+                    layoutId = layout.Id;
                 }
                 else
                 {
-                    layout = project.Layout;
-                    layout.GridSize = request.GridSize;
+                    await _context.ProjectLayouts
+                        .Where(x => x.Id == layoutId)
+                        .ExecuteUpdateAsync(updates => updates
+                            .SetProperty(x => x.GridSize, request.GridSize),
+                            cancellationToken);
 
-                    var existingBuildings = layout.Buildings.ToList();
-                    var existingUnits = existingBuildings
-                        .SelectMany(x => x.Units)
-                        .ToList();
+                    await _context.LayoutUnits
+                        .Where(x => x.Building.ProjectLayoutId == layoutId)
+                        .ExecuteDeleteAsync(cancellationToken);
 
-                    if (existingUnits.Count > 0)
-                        _context.Set<LayoutUnit>().RemoveRange(existingUnits);
-
-                    if (existingBuildings.Count > 0)
-                        _context.Set<LayoutBuilding>().RemoveRange(existingBuildings);
-
-                    await _context.SaveChangesAsync(cancellationToken);
-
-                    layout.Buildings.Clear();
+                    await _context.LayoutBuildings
+                        .Where(x => x.ProjectLayoutId == layoutId)
+                        .ExecuteDeleteAsync(cancellationToken);
                 }
 
                 var newBuildings = request.Buildings
-                    .Select(x => MapBuilding(layout.Id, x))
+                    .Select(x => MapBuilding(layoutId, x))
                     .ToList();
 
-                foreach (var building in newBuildings)
-                {
-                    layout.Buildings.Add(building);
-                }
+                _context.LayoutBuildings.AddRange(newBuildings);
 
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -199,7 +198,7 @@ namespace ProyectoEdificios.Services.Projects
                 Id = dto.Id.Trim(),
                 LayoutBuildingId = layoutBuildingId,
                 Name = dto.Name.Trim(),
-                ExternalUnitCode = dto.DetailedUnitCode.Trim(),
+                ExternalUnitCode = dto.DetailedUnitCode?.Trim(),
                 Status = unitStatus,
                 Paid = dto.Paid,
                 Floor = dto.Floor,

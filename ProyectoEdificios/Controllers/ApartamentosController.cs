@@ -16,7 +16,8 @@ namespace ProyectoEdificios.Controllers
         }
 
         [HttpGet("sheets")]
-        public IActionResult GetSheets() => Ok( _apartmentsService.GetSheetList() );
+        public async Task<IActionResult> GetSheets(CancellationToken cancellationToken)
+            => Ok(await _apartmentsService.GetSheetListAsync(cancellationToken));
         
     }
 }

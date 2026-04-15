@@ -38,17 +38,34 @@ namespace ProyectoEdificios.Services.Projects
 
         public async Task<(bool Success, string? Error, ProjectDto? Project)> UpdateAsync(string id, UpdateProjectDto request, CancellationToken cancellationToken = default)
         {
-            var project = await _context.Projects
-                .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+            var name = request.Nombre.Trim();
+            var address = request.Direccion.Trim();
+            var province = request.Provincia.Trim();
+            var municipality = request.Municipio.Trim();
+            var planImageUrl = request.ImagenPlano.Trim();
 
-            if (project is null)
+            var updatedRows = await _context.Projects
+                .Where(x => x.Id == id)
+                .ExecuteUpdateAsync(updates => updates
+                    .SetProperty(x => x.Name, name)
+                    .SetProperty(x => x.Address, address)
+                    .SetProperty(x => x.Province, province)
+                    .SetProperty(x => x.Municipality, municipality)
+                    .SetProperty(x => x.PlanImageUrl, planImageUrl),
+                    cancellationToken);
+
+            if (updatedRows == 0)
                 return (false, "El proyecto no existe.", null);
 
-            request.ApplyToEntity(project);
-
-            await _context.SaveChangesAsync(cancellationToken);
-
-            return (true, null, project.ToDto());
+            return (true, null, new ProjectDto
+            {
+                Id = id,
+                Nombre = name,
+                Direccion = address,
+                Provincia = province,
+                Municipio = municipality,
+                ImagenPlano = planImageUrl
+            });
         }
 
         public async Task<(bool Success, string? Error)> DeleteAsync(string id, CancellationToken cancellationToken = default)
