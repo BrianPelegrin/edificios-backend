@@ -1,48 +1,51 @@
 ﻿using ClosedXML.Excel;
-using Microsoft.Extensions.Options;
 using ProyectoEdificios.Models.DTO;
-using ProyectoEdificios.Models.Options;
 using System.Globalization;
 
 namespace ProyectoEdificios.Services.Projects
 {
     public sealed class ProjectApartmentsExcelService : IProjectApartmentsService
     {
-        private readonly IWebHostEnvironment _environment;
-        private readonly ResourcesOptions _options;
+        private readonly IChangeControlWorkbookSource _workbookSource;
+        private readonly ILogger<ProjectApartmentsExcelService> _logger;
 
-        public ProjectApartmentsExcelService(IWebHostEnvironment environment, IOptions<ResourcesOptions> options)
+        public ProjectApartmentsExcelService(
+            IChangeControlWorkbookSource workbookSource,
+            ILogger<ProjectApartmentsExcelService> logger)
         {
-            _environment = environment;
-            _options = options.Value;
+            _workbookSource = workbookSource;
+            _logger = logger;
         }
 
-        public List<string> GetSheetList()
+        public async Task<List<string>> GetSheetListAsync(CancellationToken cancellationToken = default)
         {
-            var filePath = Path.Combine(_environment.ContentRootPath, _options.FolderName, _options.ChangeControlFileName);
+            using var workbookStream = await _workbookSource.OpenReadAsync(cancellationToken);
 
-            if (!File.Exists(filePath))
+            if (workbookStream is null)
                 return new List<string>();
 
-            using var workbook = new XLWorkbook(filePath);
+            using var workbook = new XLWorkbook(workbookStream);
 
             return workbook.Worksheets.Select(ws => ws.Name).ToList();
         }
 
-        public Task<ProjectApartmentsResponseDto?> GetByProjectIdAsync(string projectId, CancellationToken cancellationToken = default)
+        public async Task<ProjectApartmentsResponseDto?> GetByProjectIdAsync(string projectId, CancellationToken cancellationToken = default)
         {
-            var filePath = Path.Combine(_environment.ContentRootPath, _options.FolderName, _options.ChangeControlFileName);
+            using var workbookStream = await _workbookSource.OpenReadAsync(cancellationToken);
 
-            if (!File.Exists(filePath))
-                return Task.FromResult<ProjectApartmentsResponseDto?>(null);
+            if (workbookStream is null)
+                return null;
 
-            using var workbook = new XLWorkbook(filePath);
+            using var workbook = new XLWorkbook(workbookStream);
 
             var worksheet = workbook.Worksheets.FirstOrDefault(ws =>
                 ws.Name.Equals(projectId, StringComparison.OrdinalIgnoreCase));
 
             if (worksheet is null)
-                return Task.FromResult<ProjectApartmentsResponseDto?>(null);
+            {
+                _logger.LogInformation("Worksheet for project {ProjectId} was not found in the change control workbook.", projectId);
+                return null;
+            }
 
             var rows = worksheet.RangeUsed()?.RowsUsed().Skip(1).ToList() ?? new List<IXLRangeRow>();
 
@@ -56,7 +59,7 @@ namespace ProyectoEdificios.Services.Projects
                 Apartments = apartments
             };
 
-            return Task.FromResult<ProjectApartmentsResponseDto?>(response);
+            return response;
         }
 
         private static ApartmentDto MapRowToDto(IXLRangeRow row)
@@ -179,7 +182,5 @@ namespace ProyectoEdificios.Services.Projects
 
             return null;
         }
-
-        
     }
 }

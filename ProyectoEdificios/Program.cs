@@ -75,6 +75,7 @@ builder.Services.Configure<ResourcesOptions>(
 builder.Services.AddDbContext<ProyectoEdificiosDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.AddScoped<IChangeControlWorkbookSource, ChangeControlWorkbookSource>();
 builder.Services.AddScoped<IProjectApartmentsService, ProjectApartmentsExcelService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
