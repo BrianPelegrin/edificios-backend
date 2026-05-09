@@ -64,6 +64,12 @@ namespace ProyectoEdificios.Services.Projects
             return new ProjectApartmentsStatsDto
             {
                 ProjectId = projectId,
+                Edificios = apartments
+                    .Select(apartment => apartment.Edificio?.Trim())
+                    .Where(edificio => !string.IsNullOrWhiteSpace(edificio))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count(),
+                Vendida = apartments.Count(apartment => IsVendida(apartment.Estado)),
                 TotalUnidades = apartments.Count,
                 UnidadesEntregadas = apartments.Count(apartment => apartment.Entregada),
                 UnidadesConSaldo = apartments.Count(apartment => apartment.Saldo),
@@ -185,6 +191,16 @@ namespace ProyectoEdificios.Services.Projects
             return normalized.Contains("disponible", StringComparison.OrdinalIgnoreCase)
                 || normalized.Contains("observacion", StringComparison.OrdinalIgnoreCase)
                 || normalized.Contains("observación", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsVendida(string estado)
+        {
+            if (string.IsNullOrWhiteSpace(estado))
+                return false;
+
+            var normalized = estado.Trim();
+            return normalized.Contains("vendida", StringComparison.OrdinalIgnoreCase)
+                || normalized.Contains("vendido", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string GetString(Row row, int columnIndex, WorkbookPart workbookPart)
