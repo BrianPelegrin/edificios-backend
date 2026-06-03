@@ -121,7 +121,8 @@ namespace ProyectoEdificios.Services.Projects
                 Saldo = ParseBool(GetString(row, 36, workbookPart)) ?? false,
                 Entregada = ParseBool(GetString(row, 37, workbookPart)) ?? false,
                 Titulo = ParseBool(GetString(row, 38, workbookPart)) ?? false,
-                DescargadaDGII = ParseBool(GetString(row, 39, workbookPart)) ?? false
+                DescargadaDGII = ParseBool(GetString(row, 39, workbookPart)) ?? false,
+                FechaEntrega = ParseDate(GetString(row, 41, workbookPart))
             };
         }
 
