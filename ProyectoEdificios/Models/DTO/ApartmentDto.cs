@@ -26,6 +26,7 @@
         public DateOnly? FechaInspeccion1 { get; set; }
         public DateOnly? FechaInspeccion2 { get; set; }
         public DateOnly? FechaFormaPago { get; set; }
+        public DateOnly? FechaEntrega { get; set; }
         public bool IniciadoVaciados { get; set; }
         public bool EnInspeccion { get; set; }
         public bool Inspeccion1 { get; set; }

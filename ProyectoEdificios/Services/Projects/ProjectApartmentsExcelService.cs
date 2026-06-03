@@ -1,4 +1,5 @@
-﻿using ClosedXML.Excel;
+﻿using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Spreadsheet;
 using ProyectoEdificios.Models.DTO;
 using System.Globalization;
 
@@ -24,34 +25,25 @@ namespace ProyectoEdificios.Services.Projects
             if (workbookStream is null)
                 return new List<string>();
 
-            using var workbook = new XLWorkbook(workbookStream);
+            using var document = SpreadsheetDocument.Open(workbookStream, false);
+            var workbookPart = document.WorkbookPart;
 
-            return workbook.Worksheets.Select(ws => ws.Name).ToList();
+            if (workbookPart?.Workbook.Sheets is null)
+                return new List<string>();
+
+            return workbookPart.Workbook.Sheets.Elements<Sheet>()
+                .Select(sheet => sheet.Name?.Value)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Cast<string>()
+                .ToList();
         }
 
         public async Task<ProjectApartmentsResponseDto?> GetByProjectIdAsync(string projectId, CancellationToken cancellationToken = default)
         {
-            using var workbookStream = await _workbookSource.OpenReadAsync(cancellationToken);
+            var apartments = await GetProjectApartmentsAsync(projectId, cancellationToken);
 
-            if (workbookStream is null)
+            if (apartments is null)
                 return null;
-
-            using var workbook = new XLWorkbook(workbookStream);
-
-            var worksheet = workbook.Worksheets.FirstOrDefault(ws =>
-                ws.Name.Equals(projectId, StringComparison.OrdinalIgnoreCase));
-
-            if (worksheet is null)
-            {
-                _logger.LogInformation("Worksheet for project {ProjectId} was not found in the change control workbook.", projectId);
-                return null;
-            }
-
-            var rows = worksheet.RangeUsed()?.RowsUsed().Skip(1).ToList() ?? new List<IXLRangeRow>();
-
-            var apartments = rows
-                .Select(row => MapRowToDto(row))
-                .ToList();
 
             var response = new ProjectApartmentsResponseDto
             {
@@ -62,61 +54,165 @@ namespace ProyectoEdificios.Services.Projects
             return response;
         }
 
-        private static ApartmentDto MapRowToDto(IXLRangeRow row)
+        public async Task<ProjectApartmentsStatsDto?> GetStatsByProjectIdAsync(string projectId, CancellationToken cancellationToken = default)
         {
-            return new ApartmentDto
+            var apartments = await GetProjectApartmentsAsync(projectId, cancellationToken);
+
+            if (apartments is null)
+                return null;
+
+            return new ProjectApartmentsStatsDto
             {
-                Id = row.RowNumber(),
-                CodUnidad = GetString(row.Cell(1)),
-                Edificio = GetString(row.Cell(2)),
-                Unidad = GetString(row.Cell(3)),
-                Metraje = ParseDecimal(row.Cell(4)),
-                Estado = GetString(row.Cell(5)),
-                Nombre = GetString(row.Cell(6)),
-                Telefono = GetString(row.Cell(7)),
-                Correo = GetString(row.Cell(8)),
-                Cedula = GetString(row.Cell(9)),
-                Precio = ParseDecimal(row.Cell(10)),
-                Inicial = ParseDecimal(row.Cell(11)),
-                FechaCompletaInicial = ParseDate(row.Cell(12)),
-                InicialDolar = ParseDecimal(row.Cell(13)),
-                Pagado = ParseDecimal(row.Cell(14)),
-                Adeudado = ParseDecimal(row.Cell(15)),
-                IniciadoVaciados = ParseBool(row.Cell(16)) ?? false,
-                FechaInicioVaciados = ParseDate(row.Cell(17)),
-                EnInspeccion = ParseBool(row.Cell(18)) ?? false,
-                FechaEntregaInspeccion = ParseDate(row.Cell(19)),
-                Legal = ParseBool(row.Cell(20)) ?? false,
-                ResponsableLegal = GetString(row.Cell(21)),
-                FechaLegal = ParseDate(row.Cell(22)),
-                Gobierno = ParseBool(row.Cell(23)) ?? false,
-                ResponsableGobierno = GetString(row.Cell(24)),
-                FechaGobierno = ParseDate(row.Cell(25)),
-                Micelaneos = ParseBool(row.Cell(26)) ?? false,
-                ResponsableMicelaneos = GetString(row.Cell(27)),
-                FechaMicelaneos = ParseDate(row.Cell(28)),
-                Inspeccion1 = ParseBool(row.Cell(29)) ?? false,
-                FechaInspeccion1 = ParseDate(row.Cell(30)),
-                Inspeccion2 = ParseBool(row.Cell(31)) ?? false,
-                FechaInspeccion2 = ParseDate(row.Cell(32)),
-                FormaPago = GetString(row.Cell(33)),
-                FechaFormaPago = ParseDate(row.Cell(34)),
-                Banco = GetString(row.Cell(35)),
-                Saldo = ParseBool(row.Cell(36)) ?? false,
-                Entregada = ParseBool(row.Cell(37)) ?? false,
-                Titulo = ParseBool(row.Cell(38)) ?? false,
-                DescargadaDGII = ParseBool(row.Cell(39)) ?? false
+                ProjectId = projectId,
+                Edificios = apartments
+                    .Select(apartment => apartment.Edificio?.Trim())
+                    .Where(edificio => !string.IsNullOrWhiteSpace(edificio))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count(),
+                Vendida = apartments.Count(apartment => IsVendida(apartment.Estado)),
+                TotalUnidades = apartments.Count,
+                UnidadesEntregadas = apartments.Count(apartment => apartment.Entregada),
+                UnidadesConSaldo = apartments.Count(apartment => apartment.Saldo),
+                UnidadesEnInspeccion = apartments.Count(apartment => apartment.EnInspeccion),
+                DisponiblesObservacion = apartments.Count(apartment => IsDisponibleOrObservacion(apartment.Estado))
             };
         }
 
-        private static string GetString(IXLCell cell)
+        private static ApartmentDto MapRowToDto(Row row, WorkbookPart workbookPart)
         {
-            return cell.GetString().Trim();
+            return new ApartmentDto
+            {
+                Id = (int)(row.RowIndex?.Value ?? 0),
+                CodUnidad = GetString(row, 1, workbookPart),
+                Edificio = GetString(row, 2, workbookPart),
+                Unidad = GetString(row, 3, workbookPart),
+                Metraje = ParseDecimal(GetString(row, 4, workbookPart)),
+                Estado = GetString(row, 5, workbookPart),
+                Nombre = GetString(row, 6, workbookPart),
+                Telefono = GetString(row, 7, workbookPart),
+                Correo = GetString(row, 8, workbookPart),
+                Cedula = GetString(row, 9, workbookPart),
+                Precio = ParseDecimal(GetString(row, 10, workbookPart)),
+                Inicial = ParseDecimal(GetString(row, 11, workbookPart)),
+                FechaCompletaInicial = ParseDate(GetString(row, 12, workbookPart)),
+                InicialDolar = ParseDecimal(GetString(row, 13, workbookPart)),
+                Pagado = ParseDecimal(GetString(row, 14, workbookPart)),
+                Adeudado = ParseDecimal(GetString(row, 15, workbookPart)),
+                IniciadoVaciados = ParseBool(GetString(row, 16, workbookPart)) ?? false,
+                FechaInicioVaciados = ParseDate(GetString(row, 17, workbookPart)),
+                EnInspeccion = ParseBool(GetString(row, 18, workbookPart)) ?? false,
+                FechaEntregaInspeccion = ParseDate(GetString(row, 19, workbookPart)),
+                Legal = ParseBool(GetString(row, 20, workbookPart)) ?? false,
+                ResponsableLegal = GetString(row, 21, workbookPart),
+                FechaLegal = ParseDate(GetString(row, 22, workbookPart)),
+                Gobierno = ParseBool(GetString(row, 23, workbookPart)) ?? false,
+                ResponsableGobierno = GetString(row, 24, workbookPart),
+                FechaGobierno = ParseDate(GetString(row, 25, workbookPart)),
+                Micelaneos = ParseBool(GetString(row, 26, workbookPart)) ?? false,
+                ResponsableMicelaneos = GetString(row, 27, workbookPart),
+                FechaMicelaneos = ParseDate(GetString(row, 28, workbookPart)),
+                Inspeccion1 = ParseBool(GetString(row, 29, workbookPart)) ?? false,
+                FechaInspeccion1 = ParseDate(GetString(row, 30, workbookPart)),
+                Inspeccion2 = ParseBool(GetString(row, 31, workbookPart)) ?? false,
+                FechaInspeccion2 = ParseDate(GetString(row, 32, workbookPart)),
+                FormaPago = GetString(row, 33, workbookPart),
+                FechaFormaPago = ParseDate(GetString(row, 34, workbookPart)),
+                Banco = GetString(row, 35, workbookPart),
+                Saldo = ParseBool(GetString(row, 36, workbookPart)) ?? false,
+                Entregada = ParseBool(GetString(row, 37, workbookPart)) ?? false,
+                Titulo = ParseBool(GetString(row, 38, workbookPart)) ?? false,
+                DescargadaDGII = ParseBool(GetString(row, 39, workbookPart)) ?? false,
+                FechaEntrega = ParseDate(GetString(row, 41, workbookPart))
+            };
         }
 
-        private static bool? ParseBool(IXLCell cell)
+        private async Task<List<ApartmentDto>?> GetProjectApartmentsAsync(string projectId, CancellationToken cancellationToken)
         {
-            var value = cell.GetString().Trim().ToUpperInvariant();
+            using var workbookStream = await _workbookSource.OpenReadAsync(cancellationToken);
+
+            if (workbookStream is null)
+                return null;
+
+            using var document = SpreadsheetDocument.Open(workbookStream, false);
+            var workbookPart = document.WorkbookPart;
+            var worksheet = workbookPart?.Workbook.Sheets?.Elements<Sheet>().FirstOrDefault(sheet =>
+                string.Equals(sheet.Name?.Value, projectId, StringComparison.OrdinalIgnoreCase));
+
+            if (worksheet is null)
+            {
+                _logger.LogInformation("Worksheet for project {ProjectId} was not found in the change control workbook.", projectId);
+                return null;
+            }
+
+            var worksheetPart = (WorksheetPart)workbookPart!.GetPartById(worksheet.Id!.Value!);
+            var rows = GetApartmentRows(worksheetPart, workbookPart);
+
+            return rows
+                .Select(row => MapRowToDto(row, workbookPart))
+                .ToList();
+        }
+
+        private static List<Row> GetApartmentRows(WorksheetPart worksheetPart, WorkbookPart workbookPart)
+        {
+            var rows = worksheetPart.Worksheet.GetFirstChild<SheetData>()?.Elements<Row>().ToList() ?? new List<Row>();
+
+            if (rows.Count == 0)
+                return rows;
+
+            var headerIndex = rows.FindIndex(row =>
+                string.Equals(GetString(row, 1, workbookPart), "unidad", StringComparison.OrdinalIgnoreCase));
+
+            if (headerIndex >= 0)
+                return rows.Skip(headerIndex + 1)
+                    .Where(row => IsApartmentRow(row, workbookPart))
+                    .ToList();
+
+            return rows.Skip(1)
+                .Where(row => IsApartmentRow(row, workbookPart))
+                .ToList();
+        }
+
+        private static bool IsApartmentRow(Row row, WorkbookPart workbookPart)
+        {
+            var codUnidad = GetString(row, 1, workbookPart);
+            var unidad = GetString(row, 3, workbookPart);
+            var estado = GetString(row, 5, workbookPart);
+
+            return !string.IsNullOrWhiteSpace(codUnidad)
+                || !string.IsNullOrWhiteSpace(unidad)
+                || !string.IsNullOrWhiteSpace(estado);
+        }
+
+        private static bool IsDisponibleOrObservacion(string estado)
+        {
+            if (string.IsNullOrWhiteSpace(estado))
+                return false;
+
+            var normalized = estado.Trim();
+            return normalized.Contains("disponible", StringComparison.OrdinalIgnoreCase)
+                || normalized.Contains("observacion", StringComparison.OrdinalIgnoreCase)
+                || normalized.Contains("observación", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsVendida(string estado)
+        {
+            if (string.IsNullOrWhiteSpace(estado))
+                return false;
+
+            var normalized = estado.Trim();
+            return normalized.Contains("vendida", StringComparison.OrdinalIgnoreCase)
+                || normalized.Contains("vendido", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string GetString(Row row, int columnIndex, WorkbookPart workbookPart)
+        {
+            var cell = GetCell(row, columnIndex);
+            return GetCellValue(cell, workbookPart).Trim();
+        }
+
+        private static bool? ParseBool(string value)
+        {
+            value = value.Trim().ToUpperInvariant();
 
             if (string.IsNullOrWhiteSpace(value))
                 return null;
@@ -130,9 +226,9 @@ namespace ProyectoEdificios.Services.Projects
             return null;
         }
 
-        private static decimal? ParseDecimal(IXLCell cell)
+        private static decimal? ParseDecimal(string raw)
         {
-            var raw = cell.GetString().Trim();
+            raw = raw.Trim();
 
             if (string.IsNullOrWhiteSpace(raw))
                 return null;
@@ -149,30 +245,24 @@ namespace ProyectoEdificios.Services.Projects
             return null;
         }
 
-        private static DateOnly? ParseDate(IXLCell cell)
+        private static DateOnly? ParseDate(string raw)
         {
-            if (cell.IsEmpty())
+            raw = raw.Trim();
+
+            if (string.IsNullOrWhiteSpace(raw) || raw is "N/A" or "--" or "-")
                 return null;
 
-            if (cell.DataType == XLDataType.DateTime)
-                return DateOnly.FromDateTime(cell.GetDateTime());
-
-            if (cell.DataType == XLDataType.Number)
+            if (double.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out var oaDate))
             {
                 try
                 {
-                    return DateOnly.FromDateTime(DateTime.FromOADate(cell.GetDouble()));
+                    return DateOnly.FromDateTime(DateTime.FromOADate(oaDate));
                 }
                 catch
                 {
                     return null;
                 }
             }
-
-            var raw = cell.GetString().Trim();
-
-            if (string.IsNullOrWhiteSpace(raw) || raw is "N/A" or "--" or "-")
-                return null;
 
             if (DateTime.TryParse(raw, new CultureInfo("es-DO"), DateTimeStyles.None, out var date))
                 return DateOnly.FromDateTime(date);
@@ -181,6 +271,54 @@ namespace ProyectoEdificios.Services.Projects
                 return DateOnly.FromDateTime(date);
 
             return null;
+        }
+
+        private static Cell? GetCell(Row row, int columnIndex)
+        {
+            return row.Elements<Cell>()
+                .FirstOrDefault(cell => GetColumnIndex(cell.CellReference?.Value) == columnIndex);
+        }
+
+        private static string GetCellValue(Cell? cell, WorkbookPart workbookPart)
+        {
+            if (cell is null)
+                return string.Empty;
+
+            if (cell.DataType?.Value == CellValues.SharedString)
+            {
+                var sharedStringTable = workbookPart.SharedStringTablePart?.SharedStringTable;
+                if (sharedStringTable is null)
+                    return cell.InnerText;
+
+                if (int.TryParse(cell.InnerText, out var sharedStringIndex))
+                    return sharedStringTable.ElementAt(sharedStringIndex).InnerText;
+            }
+
+            if (cell.DataType?.Value == CellValues.InlineString)
+                return cell.InlineString?.Text?.Text ?? cell.InnerText;
+
+            if (cell.DataType?.Value == CellValues.Boolean)
+                return cell.InnerText == "1" ? "TRUE" : "FALSE";
+
+            return cell.InnerText;
+        }
+
+        private static int GetColumnIndex(string? cellReference)
+        {
+            if (string.IsNullOrWhiteSpace(cellReference))
+                return -1;
+
+            var columnIndex = 0;
+
+            foreach (var character in cellReference)
+            {
+                if (!char.IsLetter(character))
+                    break;
+
+                columnIndex = (columnIndex * 26) + (char.ToUpperInvariant(character) - 'A' + 1);
+            }
+
+            return columnIndex;
         }
     }
 }

@@ -115,6 +115,19 @@ namespace ProyectoEdificios.Controllers
             return Ok(response);
         }
 
+        [HttpGet("{id}/apartments/stats")]
+        [ProducesResponseType(typeof(ProjectApartmentsStatsDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetProjectApartmentsStats(string id, CancellationToken cancellationToken)
+        {
+            var response = await _projectApartmentsService.GetStatsByProjectIdAsync(id, cancellationToken);
+
+            if (response is null)
+                return NotFound();
+
+            return Ok(response);
+        }
+
         [Authorize(Roles = "admin")]
         [HttpPost]
         [ProducesResponseType(typeof(ProjectDto), StatusCodes.Status201Created)]
