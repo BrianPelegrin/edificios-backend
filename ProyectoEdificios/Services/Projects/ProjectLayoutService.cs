@@ -56,7 +56,13 @@ namespace ProyectoEdificios.Services.Projects
                     var layout = new ProjectLayout
                     {
                         ProjectId = projectId,
-                        GridSize = request.GridSize
+                        GridSize = request.GridSize,
+                        BlueprintX = request.BlueprintTransform?.X,
+                        BlueprintZ = request.BlueprintTransform?.Z,
+                        BlueprintWidth = request.BlueprintTransform?.Width,
+                        BlueprintDepth = request.BlueprintTransform?.Depth,
+                        BlueprintRotationY = request.BlueprintTransform?.RotationY,
+                        BlueprintOpacity = request.BlueprintTransform?.Opacity
                     };
 
                     _context.ProjectLayouts.Add(layout);
@@ -68,7 +74,13 @@ namespace ProyectoEdificios.Services.Projects
                     await _context.ProjectLayouts
                         .Where(x => x.Id == layoutId)
                         .ExecuteUpdateAsync(updates => updates
-                            .SetProperty(x => x.GridSize, request.GridSize),
+                            .SetProperty(x => x.GridSize, request.GridSize)
+                            .SetProperty(x => x.BlueprintX, request.BlueprintTransform == null ? null : request.BlueprintTransform.X)
+                            .SetProperty(x => x.BlueprintZ, request.BlueprintTransform == null ? null : request.BlueprintTransform.Z)
+                            .SetProperty(x => x.BlueprintWidth, request.BlueprintTransform == null ? null : request.BlueprintTransform.Width)
+                            .SetProperty(x => x.BlueprintDepth, request.BlueprintTransform == null ? null : request.BlueprintTransform.Depth)
+                            .SetProperty(x => x.BlueprintRotationY, request.BlueprintTransform == null ? null : request.BlueprintTransform.RotationY)
+                            .SetProperty(x => x.BlueprintOpacity, request.BlueprintTransform == null ? null : request.BlueprintTransform.Opacity),
                             cancellationToken);
 
                     await _context.LayoutUnits
@@ -105,6 +117,21 @@ namespace ProyectoEdificios.Services.Projects
 
             if (request.Buildings is null)
                 return "La colección buildings es obligatoria.";
+
+            if (request.BlueprintTransform is not null)
+            {
+                var transform = request.BlueprintTransform;
+                if (!double.IsFinite(transform.X) || !double.IsFinite(transform.Z) ||
+                    !double.IsFinite(transform.Width) || !double.IsFinite(transform.Depth) ||
+                    !double.IsFinite(transform.RotationY) || !double.IsFinite(transform.Opacity))
+                    return "Los valores de blueprintTransform deben ser números finitos.";
+
+                if (transform.Width <= 0 || transform.Depth <= 0)
+                    return "width y depth de blueprintTransform deben ser mayores que cero.";
+
+                if (transform.Opacity is < 0.15 or > 1)
+                    return "opacity de blueprintTransform debe estar entre 0.15 y 1.";
+            }
 
             var buildingIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var unitIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

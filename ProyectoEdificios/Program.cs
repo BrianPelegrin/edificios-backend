@@ -7,9 +7,15 @@ using ProyectoEdificios.Models.Options;
 using ProyectoEdificios.Services.Auth;
 using ProyectoEdificios.Services.Projects;
 using ProyectoEdificios.Services.Users;
+using Serilog;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext());
 
 // 👇 CORS
 builder.Services.AddCors(options =>
@@ -110,6 +116,9 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
+    var dbContext = scope.ServiceProvider.GetRequiredService<ProyectoEdificiosDbContext>();
+    await dbContext.Database.MigrateAsync();
+
     var initializer = scope.ServiceProvider.GetRequiredService<AdminUserInitializer>();
     await initializer.EnsureAdminUserExistsAsync();
 }
@@ -123,9 +132,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseSerilogRequestLogging();
+
 // MUY IMPORTANTE: aquí
 app.UseCors("AllowAll");
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

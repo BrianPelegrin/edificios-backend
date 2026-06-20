@@ -20,6 +20,13 @@ namespace ProyectoEdificios.Data.EntityConfigurations
             builder.Property(x => x.GridSize)
                 .IsRequired();
 
+            builder.Property(x => x.BlueprintX);
+            builder.Property(x => x.BlueprintZ);
+            builder.Property(x => x.BlueprintWidth);
+            builder.Property(x => x.BlueprintDepth);
+            builder.Property(x => x.BlueprintRotationY);
+            builder.Property(x => x.BlueprintOpacity);
+
             builder.HasIndex(x => x.ProjectId)
                 .IsUnique();
 

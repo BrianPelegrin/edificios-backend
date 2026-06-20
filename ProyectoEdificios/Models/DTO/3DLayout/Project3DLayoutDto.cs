@@ -4,6 +4,7 @@
     {
         public string ProjectId { get; set; } = default!;
         public int GridSize { get; set; }
+        public BlueprintTransformDto? BlueprintTransform { get; set; }
         public List<LayoutBuildingDto> Buildings { get; set; } = [];
     }
 }
