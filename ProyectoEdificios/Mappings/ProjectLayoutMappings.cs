@@ -12,6 +12,17 @@ namespace ProyectoEdificios.Mappings
             {
                 ProjectId = project.Id,
                 GridSize = project.Layout!.GridSize,
+                BlueprintTransform = project.Layout.BlueprintWidth == null
+                    ? null
+                    : new BlueprintTransformDto
+                    {
+                        X = project.Layout.BlueprintX!.Value,
+                        Z = project.Layout.BlueprintZ!.Value,
+                        Width = project.Layout.BlueprintWidth.Value,
+                        Depth = project.Layout.BlueprintDepth!.Value,
+                        RotationY = project.Layout.BlueprintRotationY!.Value,
+                        Opacity = project.Layout.BlueprintOpacity!.Value
+                    },
                 Buildings = project.Layout.Buildings
                     .OrderBy(building => building.Name)
                     .Select(building => new LayoutBuildingDto
@@ -64,6 +75,7 @@ namespace ProyectoEdificios.Mappings
             {
                 ProjectId = project.Id,
                 GridSize = project.Layout.GridSize,
+                BlueprintTransform = MapBlueprintTransform(project.Layout),
                 Buildings = project.Layout.Buildings
                     .OrderBy(building => building.Name)
                     .Select(building => building.ToDto(project.Id))
@@ -126,6 +138,22 @@ namespace ProyectoEdificios.Mappings
                 UnitStatus.Sold => "sold",
                 UnitStatus.Delivered => "delivered",
                 _ => "available"
+            };
+        }
+
+        private static BlueprintTransformDto? MapBlueprintTransform(ProjectLayout layout)
+        {
+            if (layout.BlueprintWidth is null)
+                return null;
+
+            return new BlueprintTransformDto
+            {
+                X = layout.BlueprintX!.Value,
+                Z = layout.BlueprintZ!.Value,
+                Width = layout.BlueprintWidth.Value,
+                Depth = layout.BlueprintDepth!.Value,
+                RotationY = layout.BlueprintRotationY!.Value,
+                Opacity = layout.BlueprintOpacity!.Value
             };
         }
     }

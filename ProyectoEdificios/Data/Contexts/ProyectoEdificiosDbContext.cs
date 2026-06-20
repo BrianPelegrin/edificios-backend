@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ProyectoEdificios.Models.Entities.Users;
 using ProyectoEdificios.Models.Entities.ProjectLayoutEntities;
+using ProyectoEdificios.Models.Entities.Settings;
 
 namespace ProyectoEdificios.Data.Contexts;
 
@@ -21,6 +22,7 @@ public partial class ProyectoEdificiosDbContext : DbContext
     public DbSet<ProjectLayout> ProjectLayouts => Set<ProjectLayout>();
     public DbSet<LayoutBuilding> LayoutBuildings => Set<LayoutBuilding>();
     public DbSet<LayoutUnit> LayoutUnits => Set<LayoutUnit>();
+    public DbSet<UnitColorSetting> UnitColorSettings => Set<UnitColorSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

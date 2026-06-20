@@ -6,8 +6,6 @@ namespace ProyectoEdificios.Models.DTO
         public int Edificios { get; set; }
         public int Vendida { get; set; }
         public int TotalUnidades { get; set; }
-        public int UnidadesEntregadas { get; set; }
-        public int UnidadesConSaldo { get; set; }
         public int UnidadesEnInspeccion { get; set; }
         public int DisponiblesObservacion { get; set; }
     }

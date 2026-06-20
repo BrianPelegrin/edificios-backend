@@ -1,8 +1,12 @@
-﻿namespace ProyectoEdificios.Models.DTO.Projects
+﻿using ProyectoEdificios.Models.DTO;
+
+namespace ProyectoEdificios.Models.DTO.Projects
 {
     public sealed class UpsertProject3DLayoutDto
     {
+        public string? ProjectId { get; set; }
         public int GridSize { get; set; }
+        public BlueprintTransformDto? BlueprintTransform { get; set; }
         public List<UpsertLayoutBuildingDto> Buildings { get; set; } = [];
     }
 

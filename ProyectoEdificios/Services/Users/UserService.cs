@@ -10,12 +10,12 @@ namespace ProyectoEdificios.Services.Users
 {
     public sealed class UserService : IUserService
     {
-        private static readonly HashSet<string> AllowedRoles = new(StringComparer.OrdinalIgnoreCase)
+        /*private static readonly HashSet<string> AllowedRoles = new(StringComparer.OrdinalIgnoreCase)
         {
             "admin",
             "viewer",
             "editor"
-        };
+        };*/
 
         private readonly ProyectoEdificiosDbContext _context;
         private readonly IPasswordHasherService _passwordHasher;
@@ -48,8 +48,8 @@ namespace ProyectoEdificios.Services.Users
             var email = request.Email.Trim().ToLowerInvariant();
             var role = NormalizeRole(request.Role);
 
-            if (!AllowedRoles.Contains(role))
-                return (false, "El rol enviado no es válido.", null);
+           // if (!AllowedRoles.Contains(role))
+            //    return (false, "El rol enviado no es válido.", null);
 
             if (string.IsNullOrWhiteSpace(request.Password))
                 return (false, "La contraseña es obligatoria.", null);
@@ -89,8 +89,8 @@ namespace ProyectoEdificios.Services.Users
             var email = request.Email.Trim().ToLowerInvariant();
             var role = NormalizeRole(request.Role);
 
-            if (!AllowedRoles.Contains(role))
-                return (false, "El rol enviado no es válido.", null);
+         //   if (!AllowedRoles.Contains(role))
+            //    return (false, "El rol enviado no es válido.", null);
 
             var emailInUse = await _context.Users
                 .AnyAsync(x => x.Id != id && x.Email == email, cancellationToken);

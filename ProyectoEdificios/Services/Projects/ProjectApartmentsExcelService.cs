@@ -71,8 +71,6 @@ namespace ProyectoEdificios.Services.Projects
                     .Count(),
                 Vendida = apartments.Count(apartment => IsVendida(apartment.Estado)),
                 TotalUnidades = apartments.Count,
-                UnidadesEntregadas = apartments.Count(apartment => apartment.Entregada),
-                UnidadesConSaldo = apartments.Count(apartment => apartment.Saldo),
                 UnidadesEnInspeccion = apartments.Count(apartment => apartment.EnInspeccion),
                 DisponiblesObservacion = apartments.Count(apartment => IsDisponibleOrObservacion(apartment.Estado))
             };
