@@ -7,6 +7,15 @@ namespace ProyectoEdificios.Mappings
 {
     public static class ProjectMappings
     {
+        public static readonly Expression<Func<Project, ProjectListItemDto>> ToListItemDtoExpression = project => new ProjectListItemDto
+        {
+            Id = project.Id,
+            Nombre = project.Name,
+            Direccion = project.Address,
+            Provincia = project.Province,
+            Municipio = project.Municipality
+        };
+
         public static readonly Expression<Func<Project, ProjectDto>> ToDtoExpression = project => new ProjectDto
         {
             Id = project.Id,

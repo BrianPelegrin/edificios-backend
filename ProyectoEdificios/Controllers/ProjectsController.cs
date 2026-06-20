@@ -31,12 +31,12 @@ namespace ProyectoEdificios.Controllers
         }
 
         [HttpGet]
-        [ProducesResponseType(typeof(List<ProjectDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(List<ProjectListItemDto>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetProjects(CancellationToken cancellationToken)
         {
             var projects = await _context.Projects
                 .AsNoTracking()
-                .Select(ProjectMappings.ToDtoExpression)
+                .Select(ProjectMappings.ToListItemDtoExpression)
                 .ToListAsync(cancellationToken);
 
             return Ok(projects);
