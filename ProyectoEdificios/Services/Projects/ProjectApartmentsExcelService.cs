@@ -76,12 +76,25 @@ namespace ProyectoEdificios.Services.Projects
             };
         }
 
-        private static ApartmentDto MapRowToDto(Row row, WorkbookPart workbookPart)
+        private static ApartmentDto MapRowToDto(
+            Row row,
+            WorkbookPart workbookPart,
+            IReadOnlyDictionary<string, DateOnly> deliveryDatesByUnit)
         {
+            var codUnidad = GetString(row, 1, workbookPart);
+            var fechaEntrega = ParseDate(GetString(row, 41, workbookPart));
+
+            if (fechaEntrega is null
+                && !string.IsNullOrWhiteSpace(codUnidad)
+                && deliveryDatesByUnit.TryGetValue(codUnidad, out var deliveryDate))
+            {
+                fechaEntrega = deliveryDate;
+            }
+
             return new ApartmentDto
             {
                 Id = (int)(row.RowIndex?.Value ?? 0),
-                CodUnidad = GetString(row, 1, workbookPart),
+                CodUnidad = codUnidad,
                 Edificio = GetString(row, 2, workbookPart),
                 Unidad = GetString(row, 3, workbookPart),
                 Metraje = ParseDecimal(GetString(row, 4, workbookPart)),
@@ -120,7 +133,7 @@ namespace ProyectoEdificios.Services.Projects
                 Entregada = ParseBool(GetString(row, 37, workbookPart)) ?? false,
                 Titulo = ParseBool(GetString(row, 38, workbookPart)) ?? false,
                 DescargadaDGII = ParseBool(GetString(row, 39, workbookPart)) ?? false,
-                FechaEntrega = ParseDate(GetString(row, 41, workbookPart))
+                FechaEntrega = fechaEntrega
             };
         }
 
@@ -144,10 +157,39 @@ namespace ProyectoEdificios.Services.Projects
 
             var worksheetPart = (WorksheetPart)workbookPart!.GetPartById(worksheet.Id!.Value!);
             var rows = GetApartmentRows(worksheetPart, workbookPart);
+            var deliveryDatesByUnit = GetDeliveryDatesByUnit(workbookPart);
 
             return rows
-                .Select(row => MapRowToDto(row, workbookPart))
+                .Select(row => MapRowToDto(row, workbookPart, deliveryDatesByUnit))
                 .ToList();
+        }
+
+        private static Dictionary<string, DateOnly> GetDeliveryDatesByUnit(WorkbookPart workbookPart)
+        {
+            var worksheet = workbookPart.Workbook.Sheets?.Elements<Sheet>().FirstOrDefault(sheet =>
+                string.Equals(sheet.Name?.Value, "Entregas", StringComparison.OrdinalIgnoreCase));
+
+            if (worksheet?.Id?.Value is null)
+                return new Dictionary<string, DateOnly>(StringComparer.OrdinalIgnoreCase);
+
+            var worksheetPart = (WorksheetPart)workbookPart.GetPartById(worksheet.Id.Value);
+            var rows = worksheetPart.Worksheet.GetFirstChild<SheetData>()?.Elements<Row>() ?? Enumerable.Empty<Row>();
+            var deliveryDatesByUnit = new Dictionary<string, DateOnly>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var row in rows)
+            {
+                var codUnidad = GetString(row, 3, workbookPart);
+
+                if (string.IsNullOrWhiteSpace(codUnidad))
+                    continue;
+
+                var deliveryDate = ParseDate(GetString(row, 6, workbookPart));
+
+                if (deliveryDate is not null)
+                    deliveryDatesByUnit[codUnidad] = deliveryDate.Value;
+            }
+
+            return deliveryDatesByUnit;
         }
 
         private static List<Row> GetApartmentRows(WorksheetPart worksheetPart, WorkbookPart workbookPart)
